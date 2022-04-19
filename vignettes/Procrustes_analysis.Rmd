@@ -1,0 +1,192 @@
+---
+title: "Procrustes_analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Procrustes_analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(compare2)
+library(dplyr)
+library(vegan)
+library(ggplot2)
+```
+
+## Loading data
+
+```{r}
+tab <- read.table(system.file("extdata/procrustes_analysis_data.txt",package = "compare2"),sep = "\t",header = T,stringsAsFactors = FALSE)
+
+tab_day <- tab %>% filter(Time == "Day")
+tab_night <- tab %>% filter(Time == "Night")
+
+row.names(tab_day) <- paste0(tab_day$Stationpair,"_",tab_day$Depth)
+row.names(tab_night) <- paste0(tab_night$Stationpair,"_",tab_night$Depth)
+
+group_day <- tab_day[,1:3]
+group_night <- tab_night[,1:3]
+
+tab_day <- tab_day[-c(1:3)]
+tab_night <- tab_night[-c(1:3)]
+
+#tab_night <- tab_night %>% select_if(colSums(.) != 0)
+```
+
+## PCA
+```{r}
+tab_day_hel <- decostand(tab_day,method = 'hellinger')
+tab_night_hel <- decostand(tab_night,method = 'hellinger')
+pca_day <- rda(tab_day_hel,scale = FALSE)
+pca_night <- rda(tab_night_hel,scale = FALSE)
+```
+
+## Procrustes
+```{r}
+proc <- procrustes(X = pca_day, Y = pca_night, symmetric = TRUE)
+summary(proc)
+plot(proc,kind=1)
+plot(proc,kind=2)
+residuals(proc)
+```
+### Residuals boxplot
+```{r}
+result <- data.frame(residuals = residuals(proc),group_day[c(2,3)])
+result[result$Depth>50 & result$Depth<100,]$Depth <- 'DCM'
+#result$Depth <- factor(result$Depth,levels = c(3,10,25,50,'DCM',100,200,500))
+result$Depth <- factor(result$Depth,levels = c(500,200,100,'DCM',50,25,10,3))
+ggplot(result,aes(x = Depth, y = residuals, color =Depth ))+geom_boxplot(outlier.shape = NA)+geom_jitter(color="black", size=1, alpha=0.5)+coord_flip()+theme_bw()+scale_y_continuous(position = 'right')+guides(color = guide_legend(reverse = TRUE))
+ggplot(result,aes(x = Stationpair, y = residuals, color = Stationpair ))+geom_boxplot(outlier.shape = NA)+geom_jitter(color="black", size=1, alpha=0.5)+coord_flip()+theme_bw()+scale_y_continuous(position = 'right')+guides(color = guide_legend(reverse = TRUE))
+```
+
+### Visulizatiion
+```{r}
+Y <- cbind(data.frame(proc$Yrot), data.frame(proc$X),result)
+X <- data.frame(proc$rotation)
+```
+
+```{r}
+ggplot(Y) +
+  geom_vline(xintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_hline(yintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_abline(intercept = 0, slope = X[1,2]/X[1,1], size = 0.3) +
+  geom_abline(intercept = 0, slope = X[2,2]/X[2,1], size = 0.3) + 
+  geom_point(aes(X1, X2, color=Stationpair), shape = 16) + 
+  geom_point(aes(PC1, PC2, color=Stationpair), shape = 1) + 
+  geom_segment(aes(x = X1, y = X2, xend = PC1, yend = PC2), arrow = arrow(length = unit(0.1, 'cm')), color = 'grey', size = 0.3) + 
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent'), legend.key = element_rect(fill = 'transparent')) + 
+  labs(x = 'Dimension 1', y = 'Dimension 2', color = '') 
+ggplot(Y) +
+  geom_vline(xintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_hline(yintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_abline(intercept = 0, slope = X[1,2]/X[1,1], size = 0.3) +
+  geom_abline(intercept = 0, slope = X[2,2]/X[2,1], size = 0.3) + 
+  geom_point(aes(X1, X2, color=Depth), shape = 16) + 
+  geom_point(aes(PC1, PC2, color=Depth), shape = 1)+ 
+  geom_segment(aes(x = X1, y = X2, xend = PC1, yend = PC2), arrow = arrow(length = unit(0.1, 'cm')), color = 'grey', size = 0.3) + 
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent'), legend.key = element_rect(fill = 'transparent')) + 
+  labs(x = 'Dimension 1', y = 'Dimension 2', color = '') 
+ggplot(Y) +
+  geom_vline(xintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_hline(yintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_abline(intercept = 0, slope = X[1,2]/X[1,1], size = 0.3) +
+  geom_abline(intercept = 0, slope = X[2,2]/X[2,1], size = 0.3) + 
+  geom_point(aes(X1, X2, color=Depth, shape=Stationpair)) + 
+  geom_point(aes(PC1, PC2, color=Depth, shape=Stationpair))+ 
+  geom_segment(aes(x = X1, y = X2, xend = PC1, yend = PC2), arrow = arrow(length = unit(0.1, 'cm')), color = 'grey', size = 0.3) + 
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent'), legend.key = element_rect(fill = 'transparent')) + 
+  labs(x = 'Dimension 1', y = 'Dimension 2', color = '') 
+```
+
+## Loading data
+
+```{r}
+tab <- read.table(system.file("extdata/procrustes_analysis_data_2.txt",package = "compare2"),sep = "\t",header = T,stringsAsFactors = FALSE)
+
+tab_day <- tab %>% filter(Time == "Day")
+tab_night <- tab %>% filter(Time == "Night")
+
+row.names(tab_day) <- paste0(tab_day$Stationpair,"_",tab_day$Depth)
+row.names(tab_night) <- paste0(tab_night$Stationpair,"_",tab_night$Depth)
+
+group_day <- tab_day[,1:3]
+group_night <- tab_night[,1:3]
+
+tab_day <- tab_day[-c(1:3)]
+tab_night <- tab_night[-c(1:3)]
+
+#tab_night <- tab_night %>% select_if(colSums(.) != 0)
+```
+
+## PCA
+```{r}
+tab_day_hel <- decostand(tab_day,method = 'hellinger')
+tab_night_hel <- decostand(tab_night,method = 'hellinger')
+pca_day <- rda(tab_day_hel,scale = FALSE)
+pca_night <- rda(tab_night_hel,scale = FALSE)
+```
+
+## Procrustes
+```{r}
+proc <- procrustes(X = pca_day, Y = pca_night, symmetric = TRUE)
+summary(proc)
+plot(proc,kind=1)
+plot(proc,kind=2)
+residuals(proc)
+```
+### Residuals boxplot
+```{r}
+result <- data.frame(residuals = residuals(proc),group_day[c(2,3)])
+result[result$Depth>75 & result$Depth<150,]$Depth <- 'DCM'
+#result$Depth <- factor(result$Depth,levels = c(3,10,25,50,'DCM',100,200,500))
+result$Depth <- factor(result$Depth,levels = c(500,300,200,150,'DCM',75,50,30,3))
+ggplot(result,aes(x = Depth, y = residuals, color =Depth ))+geom_boxplot(outlier.shape = NA)+geom_jitter(color="black", size=1, alpha=0.5)+coord_flip()+theme_bw()+scale_y_continuous(position = 'right')+guides(color = guide_legend(reverse = TRUE))
+ggplot(result,aes(x = Stationpair, y = residuals, color = Stationpair ))+geom_boxplot(outlier.shape = NA)+geom_jitter(color="black", size=1, alpha=0.5)+coord_flip()+theme_bw()+scale_y_continuous(position = 'right')+guides(color = guide_legend(reverse = TRUE))
+```
+
+### Visulizatiion
+```{r}
+Y <- cbind(data.frame(proc$Yrot), data.frame(proc$X),result)
+X <- data.frame(proc$rotation)
+```
+
+```{r}
+ggplot(Y) +
+  geom_vline(xintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_hline(yintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_abline(intercept = 0, slope = X[1,2]/X[1,1], size = 0.3) +
+  geom_abline(intercept = 0, slope = X[2,2]/X[2,1], size = 0.3) + 
+  geom_point(aes(X1, X2, color=Stationpair), shape = 16) + 
+  geom_point(aes(PC1, PC2, color=Stationpair), shape = 1) + 
+  geom_segment(aes(x = X1, y = X2, xend = PC1, yend = PC2), arrow = arrow(length = unit(0.1, 'cm')), color = 'grey', size = 0.3) + 
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent'), legend.key = element_rect(fill = 'transparent')) + 
+  labs(x = 'Dimension 1', y = 'Dimension 2', color = '') 
+ggplot(Y) +
+  geom_vline(xintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_hline(yintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_abline(intercept = 0, slope = X[1,2]/X[1,1], size = 0.3) +
+  geom_abline(intercept = 0, slope = X[2,2]/X[2,1], size = 0.3) + 
+  geom_point(aes(X1, X2, color=Depth), shape = 16) + 
+  geom_point(aes(PC1, PC2, color=Depth), shape = 1)+ 
+  geom_segment(aes(x = X1, y = X2, xend = PC1, yend = PC2), arrow = arrow(length = unit(0.1, 'cm')), color = 'grey', size = 0.3) + 
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent'), legend.key = element_rect(fill = 'transparent')) + 
+  labs(x = 'Dimension 1', y = 'Dimension 2', color = '') 
+ggplot(Y) +
+  geom_vline(xintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_hline(yintercept = 0, color = 'gray', linetype = 2, size = 0.3) +
+  geom_abline(intercept = 0, slope = X[1,2]/X[1,1], size = 0.3) +
+  geom_abline(intercept = 0, slope = X[2,2]/X[2,1], size = 0.3) + 
+  geom_point(aes(X1, X2, color=Depth, shape=Stationpair)) + 
+  geom_point(aes(PC1, PC2, color=Depth, shape=Stationpair))+ 
+  geom_segment(aes(x = X1, y = X2, xend = PC1, yend = PC2), arrow = arrow(length = unit(0.1, 'cm')), color = 'grey', size = 0.3) + 
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent'), legend.key = element_rect(fill = 'transparent')) + 
+  labs(x = 'Dimension 1', y = 'Dimension 2', color = '') 
+```
